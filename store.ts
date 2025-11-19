@@ -1,8 +1,53 @@
 import { create } from 'zustand';
 import { Vector3 } from 'three';
-import { GameObject, ObjectType, FeedbackMessage, DecoyVariant, StaticObstacle } from './types';
+import { GameObject, ObjectType, FeedbackMessage, DecoyVariant, StaticObstacle, RatProfile } from './types';
 
 export type GameStatus = 'intro' | 'playing' | 'won' | 'lost';
+
+export const RATS: RatProfile[] = [
+  {
+    id: 'barnaby',
+    name: '"General" Barnaby',
+    role: 'The Veteran',
+    description: 'Stoic, grumpy, and unfazed. He moves slowly but with absolute purpose.',
+    history: '7 years in the field. Clearing the "Red Sector" is his legacy. Two weeks from retirement.',
+    imageUrl: 'https://res.cloudinary.com/dfbcjsw25/image/upload/v1763563627/unnamed_1_s9exfg.jpg',
+    stats: {
+      speed: 3.0,         // Slow
+      staminaDrain: 0.6,  // Very efficient (Tank)
+      stability: 2.0,     // Rock solid, barely shakes
+      scentRange: 1.0,
+    }
+  },
+  {
+    id: 'zola',
+    name: 'Zola',
+    role: 'The Rookie',
+    description: 'Hyperactive, eager to please, and easily distracted. Demining is a game to her.',
+    history: 'The runt of the litter. Passed final exam with a record time. First deployment.',
+    imageUrl: 'https://res.cloudinary.com/dfbcjsw25/image/upload/v1763563627/unnamed_2_actdnh.jpg',
+    stats: {
+      speed: 5.5,         // Very Fast
+      staminaDrain: 1.5,  // Drains quickly
+      stability: 0.5,     // High anxiety shake
+      scentRange: 1.5,    // Sees trails from further away
+    }
+  },
+  {
+    id: 'ghost',
+    name: 'Ghost',
+    role: 'The Survivor',
+    description: 'Timid, gentle, and cautious. He works to make the "bad smell" go away.',
+    history: 'Found near an explosion site. Not trained for treats, but for protection.',
+    imageUrl: 'https://res.cloudinary.com/dfbcjsw25/image/upload/v1763563627/unnamed_3_sy16p6.jpg',
+    stats: {
+      speed: 3.8,         // Balanced
+      staminaDrain: 1.0,  // Normal
+      stability: 0.8,     // Slightly nervous
+      scentRange: 1.2,
+    }
+  }
+];
 
 interface GameState {
   status: GameStatus;
@@ -20,9 +65,11 @@ interface GameState {
   timeLeft: number;
   minesFound: number;
   dangerLevel: number; // 0.0 (safe) to 1.0 (imminent death)
+  selectedRat: RatProfile;
   
   // Actions
   startGame: () => void;
+  selectRat: (rat: RatProfile) => void;
   setScentMode: (active: boolean) => void;
   setBoosting: (active: boolean) => void;
   updateStamina: (delta: number) => void;
@@ -52,9 +99,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   timeLeft: 60,
   minesFound: 0,
   dangerLevel: 0,
+  selectedRat: RATS[0], // Default to Barnaby
 
   startGame: () => set({ status: 'playing' }),
   
+  selectRat: (rat) => set({ selectedRat: rat }),
+
   setScentMode: (active) => {
       const { stamina } = get();
       // Prevent enabling if no stamina
@@ -81,6 +131,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     if (state.isScentMode) drain += scentCost;
     if (state.isBoosting) drain += boostCost;
+
+    // Apply Character Stats Modifier
+    drain *= state.selectedRat.stats.staminaDrain;
 
     if (drain > 0) {
         newStamina -= delta * drain;

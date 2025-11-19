@@ -54,13 +54,13 @@ const Rat: React.FC = () => {
   const staticObstacles = useGameStore(state => state.staticObstacles);
   const status = useGameStore(state => state.status);
   const gameOverReason = useGameStore(state => state.gameOverReason);
+  const selectedRat = useGameStore(state => state.selectedRat);
   
   const { camera } = useThree();
   
   // Movement state
   const keys = useRef<{ [key: string]: boolean }>({});
   const velocity = useRef(new Vector3());
-  const baseSpeed = 4.0;
   const boostMultiplier = 2.2;
   
   // Camera state
@@ -127,16 +127,14 @@ const Rat: React.FC = () => {
 
     const move = new Vector3(0, 0, 0);
     
-    // CRITICAL FIX: Handle camera direction safely to prevent NaN when looking straight down
     const forward = new Vector3();
     camera.getWorldDirection(forward);
     forward.y = 0;
     
-    // Only normalize if length is sufficient, otherwise assume no forward movement component
     if (forward.lengthSq() > 0.001) {
         forward.normalize();
     } else {
-        forward.set(0, 0, -1); // Fallback
+        forward.set(0, 0, -1); 
     }
 
     const right = new Vector3();
@@ -144,7 +142,7 @@ const Rat: React.FC = () => {
     if (right.lengthSq() > 0.001) {
         right.normalize();
     } else {
-        right.set(1, 0, 0); // Fallback
+        right.set(1, 0, 0);
     }
 
     if (keys.current['ArrowUp'] || keys.current['KeyW']) move.add(forward);
@@ -154,16 +152,15 @@ const Rat: React.FC = () => {
 
     const isMoving = move.length() > 0;
     
-    // --- Refined Mouse Aiming Logic (Plane Intersection) ---
+    // Mouse Aiming
     state.raycaster.setFromCamera(state.pointer, state.camera);
     const intersection = new Vector3();
     state.raycaster.ray.intersectPlane(groundPlane.current, intersection);
 
     if (intersection) {
         const dirToMouse = intersection.sub(ref.current.position);
-        dirToMouse.y = 0; // Keep strictly horizontal
+        dirToMouse.y = 0; 
 
-        // Prevent spinning if mouse is directly on top of rat
         if (dirToMouse.lengthSq() > 0.1) {
              const targetRotation = Math.atan2(dirToMouse.x, dirToMouse.z);
              const currentRotation = ref.current.rotation.y;
@@ -172,12 +169,11 @@ const Rat: React.FC = () => {
              while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
              while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
              
-             // Snappier rotation for responsiveness
              ref.current.rotation.y += rotDiff * delta * 15;
         }
     }
 
-    // --- Collision & Explosion Logic ---
+    // Collision & Explosion Logic
     if (isMoving) {
       move.normalize();
     }
@@ -209,23 +205,14 @@ const Rat: React.FC = () => {
     }
 
     for (const obs of staticObstacles) {
-        // Determine collision threshold based on obstacle type
         let threshold = 0;
+        if (obs.type === 'rock') threshold = (obs.scale * 0.9) + 0.2;
+        else if (obs.type === 'tankTrap') threshold = 0.8;
+        else if (obs.type === 'fencePost') threshold = 0.3;
+        else if (obs.type === 'ammoBox') threshold = 0.5;
         
-        if (obs.type === 'rock') {
-            threshold = (obs.scale * 0.9) + 0.2;
-        } else if (obs.type === 'tankTrap') {
-            threshold = 0.8; // Wide collision for tank traps
-        } else if (obs.type === 'fencePost') {
-            threshold = 0.3; // Thin post
-        } else if (obs.type === 'ammoBox') {
-            threshold = 0.5; // Box size
-        }
-        
-        // Only check collision if it has a threshold (ignore bushes for hard collision)
         if (threshold > 0) {
             const dist = ref.current.position.distanceTo(obs.position);
-            
             if (dist < threshold) {
                 isColliding = true;
                 const pushDir = ref.current.position.clone().sub(obs.position).normalize();
@@ -241,16 +228,19 @@ const Rat: React.FC = () => {
         }
     }
 
-    // --- Rat Sense ---
+    // Rat Sense
+    // Apply ScentRange modifier: High scent range means they detect danger sooner
+    const rangeModifier = selectedRat.stats.scentRange;
+    const warningDist = 1.5 * rangeModifier;
+
     let currentDanger = 0;
-    if (closestUnflaggedMineDist < 1.5) {
-        currentDanger = MathUtils.clamp(1.0 - (closestUnflaggedMineDist - 0.4) / 1.1, 0, 1);
+    if (closestUnflaggedMineDist < warningDist) {
+        currentDanger = MathUtils.clamp(1.0 - (closestUnflaggedMineDist - 0.4) / (warningDist - 0.4), 0, 1);
     }
     setDangerLevel(currentDanger);
 
     if (closestUnflaggedMineDist < 0.5) {
         detonationAccumulator.current += delta;
-        // Death trigger threshold increased to 3.0 seconds
         if (detonationAccumulator.current > 3.0) {
             triggerExplosion();
         }
@@ -258,21 +248,24 @@ const Rat: React.FC = () => {
         detonationAccumulator.current = Math.max(0, detonationAccumulator.current - delta * 2);
     }
 
-    // --- Shake Logic ---
+    // Shake Logic
     let targetShake = isMoving ? 0.5 : 0.0;
     if (isColliding) targetShake = 4.0;
     if (currentDanger > 0.5) {
         targetShake += Math.sin(state.clock.elapsedTime * 10) * (currentDanger * 0.5);
     }
-    
-    // Increase shake when boosting
     if (isBoosting && isMoving) targetShake += 0.5;
+
+    // Apply Stability Stat (Higher stability = Less Shake)
+    targetShake /= selectedRat.stats.stability;
 
     const lerpSpeed = isColliding ? 20.0 : 3.0;
     shakeIntensity.current = MathUtils.lerp(shakeIntensity.current, targetShake, delta * lerpSpeed);
 
     // Apply movement
-    const currentSpeed = isBoosting ? baseSpeed * boostMultiplier : baseSpeed;
+    // Use Stat-based Speed
+    const characterBaseSpeed = selectedRat.stats.speed;
+    const currentSpeed = isBoosting ? characterBaseSpeed * boostMultiplier : characterBaseSpeed;
 
     if (!isNaN(move.x) && !isNaN(move.z)) {
         velocity.current.copy(move).multiplyScalar(currentSpeed * delta);
@@ -284,7 +277,7 @@ const Rat: React.FC = () => {
 
     updateRatPosition(ref.current.position.clone());
 
-    // --- Animation Logic ---
+    // Animation Logic
     const t = state.clock.elapsedTime;
     const isCowering = currentDanger > 0.6;
 
@@ -292,31 +285,19 @@ const Rat: React.FC = () => {
         recoilIntensity.current = MathUtils.lerp(recoilIntensity.current, 0, delta * 8);
     }
 
-    // Reset base Z position to 0 to prevent recoil drift
     if (bodyRef.current) bodyRef.current.position.z = 0;
 
     if (isCowering) {
          if (bodyRef.current) {
-            // Shivering/Breathing rapidly
             bodyRef.current.position.y = 0.1 + Math.sin(t * 50) * 0.008;
-            // Slight rapid body shifts (shaking)
             bodyRef.current.position.x = (Math.random() - 0.5) * 0.01; 
-            // Flattened, tense posture
             bodyRef.current.scale.set(1.05, 0.85, 1.05);
          }
-         
-         // Frantic tail flicking
          if (tailRef.current) {
              tailRef.current.rotation.z = -0.2 + Math.sin(t * 35) * 0.15 + (Math.random() - 0.5) * 0.1;
          }
-         
-         // Ears pinned back but twitching frantically
-         if (leftEarRef.current) {
-             leftEarRef.current.rotation.z = -0.9 + (Math.random() * 0.3);
-         }
-         if (rightEarRef.current) {
-             rightEarRef.current.rotation.z = 0.9 - (Math.random() * 0.3);
-         }
+         if (leftEarRef.current) leftEarRef.current.rotation.z = -0.9 + (Math.random() * 0.3);
+         if (rightEarRef.current) rightEarRef.current.rotation.z = 0.9 - (Math.random() * 0.3);
 
     } else if (isMoving) {
         const animSpeed = isBoosting ? 30 : 20;
@@ -347,7 +328,6 @@ const Rat: React.FC = () => {
              }
         }
         if (tailRef.current) tailRef.current.rotation.z = Math.sin(t * 1.5) * 0.08;
-        
         if (leftEarRef.current) {
             const baseRot = -0.5;
             if (Math.random() > 0.98) leftEarRef.current.rotation.z = baseRot - 0.2;
@@ -360,23 +340,19 @@ const Rat: React.FC = () => {
         }
     }
 
-    // Apply Recoil Overlay
     if (recoilIntensity.current > 0.01 && bodyRef.current) {
         const sq = recoilIntensity.current * 0.4; 
         bodyRef.current.scale.y *= (1.0 - sq);
         bodyRef.current.scale.x *= (1.0 + sq * 0.5);
         bodyRef.current.scale.z *= (1.0 + sq * 0.5);
-        bodyRef.current.position.z += sq * 0.2; // Now applied after reset
+        bodyRef.current.position.z += sq * 0.2; 
     }
 
-    // Camera Follow
-    // Slightly increase follow distance when boosting for speed effect
     const followDist = isBoosting ? -2.6 : -2.2;
     const cameraOffset = new Vector3(0, 1.0, followDist); 
     cameraOffset.applyAxisAngle(new Vector3(0, 1, 0), ref.current.rotation.y);
     const targetCamPos = ref.current.position.clone().add(cameraOffset);
     
-    // Limit camera height to avoid clipping into ground
     targetCamPos.y = Math.max(0.5, targetCamPos.y);
 
     camera.position.lerp(targetCamPos, delta * (isBoosting ? 2.0 : 2.5));

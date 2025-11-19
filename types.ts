@@ -41,3 +41,18 @@ export interface FeedbackMessage {
   text: string;
   type: 'success' | 'failure' | 'neutral';
 }
+
+export interface RatProfile {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  history: string;
+  imageUrl: string;
+  stats: {
+    speed: number;        // Base movement speed
+    staminaDrain: number; // Multiplier (1.0 is normal, lower is better)
+    stability: number;    // Resistance to camera shake/anxiety (1.0 is normal, higher is better)
+    scentRange: number;   // Detection radius multiplier
+  };
+}

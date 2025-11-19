@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useMemo, useRef, useLayoutEffect, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Color, InstancedMesh, Object3D, PlaneGeometry, MeshStandardMaterial, InstancedBufferAttribute, ShaderMaterial, DoubleSide } from 'three';
+import { Color, InstancedMesh, Object3D, PlaneGeometry, MeshStandardMaterial, InstancedBufferAttribute, ShaderMaterial, DoubleSide, MathUtils } from 'three';
 import { useGameStore } from '../store';
 import { StaticObstacle } from '../types';
 
@@ -9,6 +9,169 @@ type Shader = {
   vertexShader: string;
   fragmentShader: string;
 }
+
+// --- PROCEDURAL AUDIO SYSTEM ---
+const AmbientSound: React.FC = () => {
+  const isScentMode = useGameStore(state => state.isScentMode);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const windNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  
+  // Initialize Audio Engine
+  useEffect(() => {
+    const initAudio = async () => {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+
+      const ctx = new AudioContext();
+      audioCtxRef.current = ctx;
+      
+      // Master Gain for Scent Mode dampening
+      const masterGain = ctx.createGain();
+      masterGain.gain.value = 0.0; // Start silent, fade in
+      masterGain.connect(ctx.destination);
+      masterGainRef.current = masterGain;
+
+      // --- 1. WIND ENGINE (Pink/Brown Noise) ---
+      const bufferSize = 2 * ctx.sampleRate;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      let lastOut = 0; // Moved declaration before usage
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        output[i] = (lastOut + (0.02 * white)) / 1.02; // Brown noise approximation
+        lastOut = output[i];
+        output[i] *= 3.5; // Compensate gain
+      }
+
+      const windSource = ctx.createBufferSource();
+      windSource.buffer = noiseBuffer;
+      windSource.loop = true;
+
+      // Filter to make it sound like wind through grass (Low Pass)
+      const windFilter = ctx.createBiquadFilter();
+      windFilter.type = 'lowpass';
+      windFilter.frequency.value = 400; 
+      
+      // Wind Gain
+      const windGain = ctx.createGain();
+      windGain.gain.value = 0.15;
+
+      windSource.connect(windFilter);
+      windFilter.connect(windGain);
+      windGain.connect(masterGain);
+      windSource.start();
+      windNodeRef.current = windSource;
+
+      // Wind Variation Loop
+      const windInterval = setInterval(() => {
+         // Modulate filter frequency to simulate gusts
+         const now = ctx.currentTime;
+         const randomFreq = 200 + Math.random() * 400;
+         windFilter.frequency.exponentialRampToValueAtTime(randomFreq, now + 2);
+      }, 3000);
+
+      // --- 2. NATURE ENGINE (Insects) ---
+      const insectInterval = setInterval(() => {
+         if (Math.random() > 0.7) return; // Sparse
+         const now = ctx.currentTime;
+         
+         const osc = ctx.createOscillator();
+         const gain = ctx.createGain();
+         
+         osc.type = 'triangle';
+         osc.frequency.setValueAtTime(4000 + Math.random() * 1000, now);
+         
+         // Short chirp envelope
+         gain.gain.setValueAtTime(0, now);
+         gain.gain.linearRampToValueAtTime(0.05, now + 0.05);
+         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+         
+         osc.connect(gain);
+         gain.connect(masterGain);
+         
+         osc.start(now);
+         osc.stop(now + 0.3);
+      }, 2000 + Math.random() * 1000);
+
+      // --- 3. WAR ENGINE (Distant Rumbles/Sirens) ---
+      const warInterval = setInterval(() => {
+          if (Math.random() > 0.2) return; // Very sparse
+          const now = ctx.currentTime;
+          
+          const type = Math.random();
+          
+          if (type > 0.6) {
+              // DISTANT EXPLOSION (Filtered Noise Burst)
+              const bombSrc = ctx.createBufferSource();
+              bombSrc.buffer = noiseBuffer;
+              const bombFilter = ctx.createBiquadFilter();
+              bombFilter.type = 'lowpass';
+              bombFilter.frequency.value = 150; // Very muffled
+              const bombGain = ctx.createGain();
+              
+              bombGain.gain.setValueAtTime(0, now);
+              bombGain.gain.linearRampToValueAtTime(0.4, now + 0.1);
+              bombGain.gain.exponentialRampToValueAtTime(0.001, now + 3.0); // Long tail
+              
+              bombSrc.connect(bombFilter);
+              bombFilter.connect(bombGain);
+              bombGain.connect(masterGain);
+              bombSrc.start(now);
+              bombSrc.stop(now + 3.5);
+          } else if (type < 0.2) {
+              // DISTANT SIREN/SCREAM (Eerie Sine)
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.frequency.setValueAtTime(500, now);
+              osc.frequency.exponentialRampToValueAtTime(400, now + 4.0); // Downward slur
+              
+              gain.gain.setValueAtTime(0, now);
+              gain.gain.linearRampToValueAtTime(0.03, now + 1.0);
+              gain.gain.linearRampToValueAtTime(0, now + 4.0);
+              
+              osc.connect(gain);
+              gain.connect(masterGain);
+              osc.start(now);
+              osc.stop(now + 4.0);
+          }
+
+      }, 8000);
+
+      // Fade in Master
+      masterGain.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 2.0);
+
+      return () => {
+         clearInterval(windInterval);
+         clearInterval(insectInterval);
+         clearInterval(warInterval);
+         ctx.close();
+      };
+    };
+
+    initAudio();
+
+    return () => {
+        if (audioCtxRef.current) audioCtxRef.current.close();
+    };
+  }, []);
+
+  // Dynamic Volume Control based on Scent Mode
+  useEffect(() => {
+      if (!audioCtxRef.current || !masterGainRef.current) return;
+      
+      const ctx = audioCtxRef.current;
+      const now = ctx.currentTime;
+      const targetVol = isScentMode ? 0.15 : 0.6;
+      
+      // Smooth crossfade
+      masterGainRef.current.gain.cancelScheduledValues(now);
+      masterGainRef.current.gain.setTargetAtTime(targetVol, now, 0.5);
+
+  }, [isScentMode]);
+
+  return null;
+};
 
 // Helper to create custom blade geometry
 const createBladeGeometry = (width: number, height: number, curve: number) => {
@@ -641,6 +804,8 @@ const World: React.FC = () => {
   
   return (
     <>
+      <AmbientSound />
+
       {/* Lighting */}
       <ambientLight intensity={isScentMode ? 0.2 : 0.6} />
       <directionalLight 

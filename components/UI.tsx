@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { useGameStore } from '../store';
 
 const UI: React.FC = () => {
-  const { trust, stamina, health, bananas, isScentMode, messages, timeLeft, minesFound, status, restartGame, gameOverReason, dangerLevel } = useGameStore();
+  const { trust, stamina, health, bananas, isScentMode, messages, timeLeft, minesFound, status, restartGame, gameOverReason, dangerLevel, selectedRat } = useGameStore();
 
   // Simple visual effect for scent mode on the UI layer
   const containerClass = isScentMode 
@@ -60,16 +59,18 @@ const UI: React.FC = () => {
           {/* Left: Stats Panel - Translucent Box */}
           <div className="bg-black/60 backdrop-blur-md border border-stone-600/50 p-5 rounded-2xl shadow-2xl flex flex-col gap-5 max-w-sm">
             
-            {/* Header with Logo */}
+            {/* Header with Character Portrait */}
             <div className="flex items-center gap-3 pb-2 border-b border-stone-700/50">
                 <img 
-                    src="https://res.cloudinary.com/dfbcjsw25/image/upload/v1763552986/ratLogo_db0fdj.jpg" 
-                    alt="Tiny Hero" 
-                    className="w-12 h-12 object-contain drop-shadow-md rounded-full bg-stone-900 border border-stone-600"
+                    src={selectedRat.imageUrl} 
+                    alt={selectedRat.name} 
+                    className="w-14 h-14 object-cover drop-shadow-md rounded-full bg-stone-900 border border-stone-500"
                 />
                 <div>
-                    <h2 className="text-stone-100 font-black text-lg leading-none tracking-tight shadow-black drop-shadow-sm">OPERATIVE STATUS</h2>
-                    <span className="text-amber-500 text-xs font-bold tracking-widest">UNIT: HERO RAT</span>
+                    <h2 className="text-stone-100 font-black text-lg leading-none tracking-tight shadow-black drop-shadow-sm uppercase">
+                      {selectedRat.name}
+                    </h2>
+                    <span className="text-amber-500 text-xs font-bold tracking-widest">UNIT: {selectedRat.role}</span>
                 </div>
             </div>
 
@@ -172,12 +173,12 @@ const UI: React.FC = () => {
       {status === 'won' && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in pointer-events-auto">
              <img 
-                src="https://res.cloudinary.com/dfbcjsw25/image/upload/v1763552986/ratLogo_db0fdj.jpg" 
+                src={selectedRat.imageUrl}
                 alt="Logo" 
-                className="w-32 h-32 object-contain mb-4 drop-shadow-[0_0_15px_rgba(34,197,94,0.4)] rounded-full"
+                className="w-32 h-32 object-cover mb-4 drop-shadow-[0_0_15px_rgba(34,197,94,0.4)] rounded-full border-4 border-green-500"
             />
             <h1 className="text-6xl font-black text-green-400 mb-4 tracking-tighter drop-shadow-lg">MISSION ACCOMPLISHED</h1>
-            <p className="text-stone-200 text-2xl mb-8 font-bold">The field is safe. Good boy.</p>
+            <p className="text-stone-200 text-2xl mb-8 font-bold">The field is safe. Good job, {selectedRat.name}.</p>
             <div className="flex items-center gap-6 text-3xl mb-12 bg-black/40 p-6 rounded-xl border border-green-900">
                 <span className="text-yellow-400 font-black">🍌 {bananas} earned</span>
                 <span className="text-stone-600">|</span>
@@ -195,9 +196,9 @@ const UI: React.FC = () => {
       {status === 'lost' && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in pointer-events-auto">
              <img 
-                src="https://res.cloudinary.com/dfbcjsw25/image/upload/v1763552986/ratLogo_db0fdj.jpg" 
+                src={selectedRat.imageUrl}
                 alt="Logo" 
-                className="w-32 h-32 object-contain mb-4 grayscale opacity-70 rounded-full"
+                className="w-32 h-32 object-cover mb-4 grayscale opacity-70 rounded-full border-4 border-stone-600"
             />
             <h1 className="text-8xl font-black text-red-600 mb-2 tracking-tighter drop-shadow-[0_0_10px_rgba(220,38,38,0.8)]">
                 {gameOverTitle}
