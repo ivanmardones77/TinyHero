@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3, Group, MathUtils, Mesh } from 'three';
+import { Vector3, Group, MathUtils, Mesh, Raycaster, Plane } from 'three';
 import { useGameStore } from '../store';
 import { ObjectType } from '../types';
 
@@ -69,6 +69,7 @@ const Rat: React.FC = () => {
   
   // Logic state
   const detonationAccumulator = useRef(0);
+  const groundPlane = useRef(new Plane(new Vector3(0, 1, 0), 0));
   
   // Recoil/Feedback state
   const recoilIntensity = useRef(0);
@@ -153,21 +154,27 @@ const Rat: React.FC = () => {
 
     const isMoving = move.length() > 0;
     
-    // --- Mouse Aiming Logic ---
+    // --- Refined Mouse Aiming Logic (Plane Intersection) ---
     state.raycaster.setFromCamera(state.pointer, state.camera);
-    const rayDir = state.raycaster.ray.direction.clone();
-    rayDir.y = 0;
-    
-    if (rayDir.lengthSq() > 0.0001) {
-        rayDir.normalize();
-        const targetRotation = Math.atan2(rayDir.x, rayDir.z);
-        const currentRotation = ref.current.rotation.y;
-        
-        let rotDiff = targetRotation - currentRotation;
-        while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-        while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-        
-        ref.current.rotation.y += rotDiff * delta * 10;
+    const intersection = new Vector3();
+    state.raycaster.ray.intersectPlane(groundPlane.current, intersection);
+
+    if (intersection) {
+        const dirToMouse = intersection.sub(ref.current.position);
+        dirToMouse.y = 0; // Keep strictly horizontal
+
+        // Prevent spinning if mouse is directly on top of rat
+        if (dirToMouse.lengthSq() > 0.1) {
+             const targetRotation = Math.atan2(dirToMouse.x, dirToMouse.z);
+             const currentRotation = ref.current.rotation.y;
+             
+             let rotDiff = targetRotation - currentRotation;
+             while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+             while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+             
+             // Snappier rotation for responsiveness
+             ref.current.rotation.y += rotDiff * delta * 15;
+        }
     }
 
     // --- Collision & Explosion Logic ---
@@ -202,9 +209,22 @@ const Rat: React.FC = () => {
     }
 
     for (const obs of staticObstacles) {
+        // Determine collision threshold based on obstacle type
+        let threshold = 0;
+        
         if (obs.type === 'rock') {
+            threshold = (obs.scale * 0.9) + 0.2;
+        } else if (obs.type === 'tankTrap') {
+            threshold = 0.8; // Wide collision for tank traps
+        } else if (obs.type === 'fencePost') {
+            threshold = 0.3; // Thin post
+        } else if (obs.type === 'ammoBox') {
+            threshold = 0.5; // Box size
+        }
+        
+        // Only check collision if it has a threshold (ignore bushes for hard collision)
+        if (threshold > 0) {
             const dist = ref.current.position.distanceTo(obs.position);
-            const threshold = (obs.scale * 0.9) + 0.2; 
             
             if (dist < threshold) {
                 isColliding = true;
@@ -355,6 +375,10 @@ const Rat: React.FC = () => {
     const cameraOffset = new Vector3(0, 1.0, followDist); 
     cameraOffset.applyAxisAngle(new Vector3(0, 1, 0), ref.current.rotation.y);
     const targetCamPos = ref.current.position.clone().add(cameraOffset);
+    
+    // Limit camera height to avoid clipping into ground
+    targetCamPos.y = Math.max(0.5, targetCamPos.y);
+
     camera.position.lerp(targetCamPos, delta * (isBoosting ? 2.0 : 2.5));
 
     if (shakeIntensity.current > 0.01) {

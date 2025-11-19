@@ -33,7 +33,7 @@ export interface StaticObstacle {
   position: Vector3;
   scale: number;
   rotation: number;
-  type: 'rock' | 'bush';
+  type: 'rock' | 'bush' | 'tankTrap' | 'fencePost' | 'ammoBox';
 }
 
 export interface FeedbackMessage {

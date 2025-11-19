@@ -5,11 +5,14 @@ import { ObjectType, DecoyVariant } from '../types';
 import { Mesh, Color, ShaderMaterial } from 'three';
 import './shaders/ScentMaterial';
 
-// Fix: Extend R3F's ThreeElements interface to ensure TS recognizes scentMaterial
+// Extend ThreeElements interface to include scentMaterial
 declare module '@react-three/fiber' {
   interface ThreeElements {
     scentMaterial: {
+      attach?: string;
+      args?: any[];
       ref?: any;
+      key?: any;
       time?: number;
       color?: Color;
       intensity?: number;
@@ -21,7 +24,7 @@ declare module '@react-three/fiber' {
   }
 }
 
-// Fallback for global JSX if needed
+// Fallback for global JSX
 declare global {
   namespace JSX {
     interface IntrinsicElements {

@@ -122,10 +122,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       });
     }
 
-    // Generate Static Obstacles (Rocks & Bushes)
+    // Generate Static Obstacles
     const staticObstacles: StaticObstacle[] = [];
+    
     // Rocks (Collidable)
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 30; i++) {
         staticObstacles.push({
             id: `rock-${i}`,
             position: new Vector3((Math.random() - 0.5) * 40, 0, (Math.random() - 0.5) * 40),
@@ -134,14 +135,48 @@ export const useGameStore = create<GameState>((set, get) => ({
             type: 'rock'
         });
     }
-    // Bushes (Visual / maybe soft collision later)
-    for (let i = 0; i < 25; i++) {
+    
+    // Bushes (Visual)
+    for (let i = 0; i < 20; i++) {
          staticObstacles.push({
             id: `bush-${i}`,
             position: new Vector3((Math.random() - 0.5) * 40, 0, (Math.random() - 0.5) * 40),
             scale: 0.5 + Math.random() * 0.5,
             rotation: Math.random() * Math.PI * 2,
             type: 'bush'
+        });
+    }
+
+    // Tank Traps (War Element - Large)
+    for (let i = 0; i < 5; i++) {
+         staticObstacles.push({
+            id: `trap-${i}`,
+            position: new Vector3((Math.random() - 0.5) * 40, 0, (Math.random() - 0.5) * 40),
+            scale: 1.0 + Math.random() * 0.2,
+            rotation: Math.random() * Math.PI,
+            type: 'tankTrap'
+        });
+    }
+
+    // Fence Posts (War Element - Vertical)
+    for (let i = 0; i < 10; i++) {
+         staticObstacles.push({
+            id: `post-${i}`,
+            position: new Vector3((Math.random() - 0.5) * 42, 0, (Math.random() - 0.5) * 42),
+            scale: 0.8 + Math.random() * 0.4,
+            rotation: (Math.random() - 0.5) * 0.2, // Slight tilt
+            type: 'fencePost'
+        });
+    }
+
+    // Ammo Boxes (War Element - Small/Medium)
+    for (let i = 0; i < 6; i++) {
+         staticObstacles.push({
+            id: `box-${i}`,
+            position: new Vector3((Math.random() - 0.5) * 40, 0, (Math.random() - 0.5) * 40),
+            scale: 1.0,
+            rotation: Math.random() * Math.PI * 2,
+            type: 'ammoBox'
         });
     }
 
